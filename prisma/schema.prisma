@@ -1,0 +1,164 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Student profile
+  graduationYear Int?
+  gpa           Float?
+  satScore      Int?
+  actScore      Int?
+  targetCountries String[]
+  intendedMajors  String[]
+
+  // Relations
+  applications Application[]
+  parentChildren ParentStudent[] @relation("ParentRelation")
+  studentChildren ParentStudent[] @relation("StudentRelation")
+  notes        Note[]
+
+  @@map("users")
+}
+
+model University {
+  id               String   @id @default(cuid())
+  name             String
+  country          String
+  state            String?
+  city             String?
+  usNewsRanking    Int?
+  acceptanceRate   Float?
+  applicationSystem String // 'Common App', 'Coalition', 'Direct'
+  tuitionInState   Float?
+  tuitionOutState  Float?
+  applicationFee   Float?
+  deadlines        Json     // {early_decision: 'date', early_action: 'date', regular: 'date'}
+  requirements     Json?    // {gpa: 4.0, sat: {min: 1500, max: 1600}, essays: [...]}
+  
+  // Relations
+  applications Application[]
+
+  @@map("universities")
+}
+
+model Application {
+  id              String           @id @default(cuid())
+  studentId       String
+  universityId    String
+  applicationType ApplicationType  // 'EARLY_DECISION', 'EARLY_ACTION', 'REGULAR_DECISION', 'ROLLING_ADMISSION'
+  deadline        DateTime
+  status          ApplicationStatus @default(NOT_STARTED)
+  submittedDate   DateTime?
+  decisionDate    DateTime?
+  decisionType    DecisionType?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  student    User       @relation(fields: [studentId], references: [id])
+  university University @relation(fields: [universityId], references: [id])
+  requirements ApplicationRequirement[]
+
+  @@map("applications")
+}
+
+model ApplicationRequirement {
+  id             String           @id @default(cuid())
+  applicationId  String
+  requirementType RequirementType  // 'ESSAY', 'TRANSCRIPT', 'RECOMMENDATION', 'TEST_SCORES', 'PORTFOLIO'
+  status         RequirementStatus @default(NOT_STARTED)
+  deadline       DateTime?
+  notes          String?
+  
+  // Relations
+  application Application @relation(fields: [applicationId], references: [id])
+
+  @@map("application_requirements")
+}
+
+model ParentStudent {
+  id        String @id @default(cuid())
+  parentId  String
+  studentId String
+
+  parent  User @relation("ParentRelation", fields: [parentId], references: [id])
+  student User @relation("StudentRelation", fields: [studentId], references: [id])
+
+  @@unique([parentId, studentId])
+  @@map("parent_students")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  content   String
+  authorId  String
+  studentId String
+  createdAt DateTime @default(now())
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("notes")
+}
+
+// Enums
+enum UserRole {
+  STUDENT
+  PARENT
+  TEACHER
+  ADMIN
+}
+
+enum ApplicationType {
+  EARLY_DECISION
+  EARLY_ACTION
+  REGULAR_DECISION
+  ROLLING_ADMISSION
+}
+
+enum ApplicationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  UNDER_REVIEW
+  DECISION_RECEIVED
+}
+
+enum DecisionType {
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+  DEFERRED
+}
+
+enum RequirementType {
+  ESSAY
+  TRANSCRIPT
+  RECOMMENDATION
+  TEST_SCORES
+  PORTFOLIO
+  INTERVIEW
+}
+
+enum RequirementStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  SUBMITTED
+}
