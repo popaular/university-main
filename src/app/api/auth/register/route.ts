@@ -24,14 +24,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let userData: any = {
-      email,
-      password: hashPassword(password),
-      name,
-      role,
-      ...profile,
-    }
-
+    // 移除未使用的userData变量
     // 创建用户基础数据
     const user = await prisma.user.create({
       data: {
@@ -80,8 +73,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('注册API错误:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

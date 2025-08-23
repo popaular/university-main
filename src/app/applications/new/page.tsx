@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Navigation } from "@/components/layout/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Filter, MapPin, Award, Percent, DollarSign, Building2, BookOpen, FileText, Users, Palette, Mic, ClipboardList, GraduationCap, CheckCircle, XCircle, ChevronDown, ChevronUp, Calendar, Clock, AlertCircle, Mail, Phone, Globe, TrendingUp, ExternalLink } from 'lucide-react'
+import { Search, Filter, MapPin, Award, Percent, DollarSign, Building2, BookOpen, FileText, Users, Palette, Mic, ClipboardList, GraduationCap, CheckCircle } from 'lucide-react'
 
 interface University {
   id: string
@@ -59,7 +59,7 @@ export default function NewApplicationPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
-  const [existingApplications, setExistingApplications] = useState<any[]>([])
+  const [existingApplications, setExistingApplications] = useState<Application[]>([])
   const [formData, setFormData] = useState({
     universityId: "",
     status: "NOT_STARTED",
@@ -99,8 +99,8 @@ export default function NewApplicationPage() {
         } else {
           router.push("/")
         }
-      } catch (error) {
-        console.error("Auth check failed:", error)
+      } catch (_error) {
+        console.error("Auth check failed:", _error)
         router.push("/")
       }
     }
@@ -119,8 +119,8 @@ export default function NewApplicationPage() {
         setUniversities(data.universities)
         setFilteredUniversities(data.universities)
       }
-    } catch (error) {
-      console.error("Failed to fetch universities:", error)
+    } catch (_error) {
+      console.error("Failed to fetch universities:", _error)
     } finally {
       setLoading(false)
     }
@@ -136,15 +136,15 @@ export default function NewApplicationPage() {
         const data = await response.json()
         setExistingApplications(data.applications)
       }
-    } catch (error) {
-      console.error("Failed to fetch existing applications:", error)
+    } catch (_error) {
+      console.error("Failed to fetch existing applications:", _error)
     }
   }
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     setSearchLoading(true)
     
-    let filtered = universities.filter(university => {
+    const filteredUniversities = universities.filter(university => {
       const matchesSearch = !searchParams.search || 
         university.name.toLowerCase().includes(searchParams.search.toLowerCase())
       
@@ -166,13 +166,13 @@ export default function NewApplicationPage() {
       return matchesSearch && matchesCountry && matchesState && matchesRanking && matchesAcceptance && matchesTuition
     })
     
-    setFilteredUniversities(filtered)
+    setFilteredUniversities(filteredUniversities)
     setSearchLoading(false)
-  }
+  }, [universities, searchParams])
 
   useEffect(() => {
     handleSearch()
-  }, [searchParams])
+  }, [searchParams, handleSearch])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -885,4 +885,49 @@ export default function NewApplicationPage() {
       </div>
     </div>
   )
+}
+
+interface Application {
+  id: string
+  universityId: string
+  applicationType: string
+  status: string
+  deadline: string
+}
+
+interface University {
+  id: string
+  name: string
+  country: string
+  state?: string
+  city?: string
+  usNewsRanking?: number
+  acceptanceRate?: number
+  tuitionInState?: number
+  tuitionOutState?: number
+  applicationFee?: number
+  applicationSystem?: string
+  deadlines?: {
+    early_action?: string
+    early_decision?: string
+    regular?: string
+  }
+  requirements?: {
+    gpa?: number
+    sat?: {
+      min?: number
+      max?: number
+    }
+    act?: {
+      min?: number
+      max?: number
+    }
+    toefl?: number
+    ielts?: number
+    essays?: string[]
+    recommendations?: number
+    portfolio?: boolean
+    interview?: boolean
+    extracurriculars?: string[]
+  }
 }

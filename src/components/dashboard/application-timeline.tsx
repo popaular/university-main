@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { 
-  Calendar, 
   Clock, 
   CheckCircle, 
   AlertCircle, 
@@ -12,8 +11,6 @@ import {
   BookOpen,
   Award,
   FileText,
-  Filter,
-  Bell,
   Plus,
   User
 } from 'lucide-react'
@@ -21,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { formatDeadline, calculateProgress, getStatusColor } from '@/lib/utils'
+import { calculateProgress } from '@/lib/utils'
 
 interface Application {
   id: string
@@ -64,31 +61,9 @@ export function ApplicationTimeline() {
     averageProgress: 0,
     urgentDeadlines: 0
   })
-  const [activeFilter, setActiveFilter] = useState('all')
-  const [timeRange, setTimeRange] = useState('all')
   const [isClient, setIsClient] = useState(false)
 
-  useEffect(() => {
-    setIsClient(true)
-    fetchTimelineData()
-  }, [])
-
-  const fetchTimelineData = async () => {
-    try {
-      const response = await fetch('/api/student/applications')
-      if (response.ok) {
-        const data = await response.json()
-        setApplications(data.applications)
-        calculateTimelineStats(data.applications)
-      }
-    } catch (error) {
-      console.error('Error fetching timeline data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const calculateTimelineStats = (apps: Application[]) => {
+  const calculateTimelineStats = useCallback((apps: Application[]) => {
     if (!isClient) return
     
     const now = new Date()
@@ -115,7 +90,27 @@ export function ApplicationTimeline() {
     }
 
     setTimelineStats(stats)
-  }
+  }, [isClient])
+
+  const fetchTimelineData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/student/applications')
+      if (response.ok) {
+        const data = await response.json()
+        setApplications(data.applications)
+        calculateTimelineStats(data.applications)
+      }
+    } catch (error) {
+      console.error('Error fetching timeline data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [calculateTimelineStats])
+
+  useEffect(() => {
+    setIsClient(true)
+    fetchTimelineData()
+  }, [])
 
   const getTimelineItems = () => {
     if (!isClient) return []
@@ -243,7 +238,6 @@ export function ApplicationTimeline() {
               <CardDescription>按截止日期排序的申请进度</CardDescription>
             </div>
             <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
               筛选
             </Button>
           </div>
@@ -385,7 +379,6 @@ export function ApplicationTimeline() {
               variant="outline" 
               className="justify-start"
             >
-              <Bell className="h-4 w-4 mr-2" />
               设置提醒
             </Button>
           </div>

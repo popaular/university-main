@@ -25,6 +25,11 @@ export async function GET(request: NextRequest) {
     const payload = verifyToken(token)
     console.log('Token验证结果:', payload)
     
+    if (!payload) {
+      console.log('❌ Token验证失败，payload为null')
+      return NextResponse.json({ error: "无效的token" }, { status: 401 })
+    }
+    
     const user = await prisma.user.findUnique({
       where: { id: payload.userId as string },
       select: {

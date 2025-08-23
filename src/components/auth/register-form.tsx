@@ -53,7 +53,7 @@ export function RegisterForm() {
     }
 
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name: formData.name,
         email: formData.email,
         password: formData.password,

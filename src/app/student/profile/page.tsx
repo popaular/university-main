@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Save, ArrowLeft } from "lucide-react";
 
+import { useCallback } from "react";
+
 interface User {
   id: string;
   name: string;
@@ -43,36 +45,7 @@ export default function StudentProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          if (userData.role !== 'STUDENT') {
-            router.push("/dashboard");
-            return;
-          }
-          setUser(userData);
-          await fetchProfile();
-        } else {
-          router.push("/");
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-        router.push("/");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const response = await fetch("/api/student/profile", {
         credentials: "include",
@@ -89,15 +62,38 @@ export default function StudentProfilePage() {
           intendedMajors: data.intendedMajors?.join(', ') || '',
         });
       }
-    } catch (error) {
-      console.error("获取学生资料失败:", error);
+    } catch (_error) {
+      console.error("获取学生资料失败:", _error);
       toast({
         title: "错误",
         description: "获取学生资料失败，请稍后重试",
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+          await fetchProfile();
+        } else {
+          router.push("/");
+        }
+      } catch (_error) {
+        console.error("Auth check failed:", _error);
+        router.push("/");
+      }
+    };
+
+    checkAuth();
+  }, [router, fetchProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,8 +149,8 @@ export default function StudentProfilePage() {
           variant: "destructive",
         });
       }
-    } catch (error) {
-      console.error("更新学生资料失败:", error);
+    } catch (_error) {
+      console.error("更新学生资料失败:", _error);
       toast({
         title: "错误",
         description: "更新失败，请稍后重试",

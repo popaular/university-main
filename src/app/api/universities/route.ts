@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const minAcceptanceRate = searchParams.get('minAcceptanceRate')
     const maxAcceptanceRate = searchParams.get('maxAcceptanceRate')
 
-    const where: any = {}
+    const where: Prisma.UniversityWhereInput = {}
 
     if (search) {
       where.name = {
@@ -61,8 +62,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ universities })
   } catch (error) {
     console.error('API Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

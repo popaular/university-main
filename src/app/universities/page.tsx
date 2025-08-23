@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Navigation } from "@/components/layout/navigation"
 import { Input } from "@/components/ui/input"
@@ -39,30 +39,7 @@ export default function UniversitiesPage() {
   })
   const router = useRouter()
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch("/api/auth/me", {
-          credentials: "include"
-        })
-        
-        if (response.ok) {
-          const userData = await response.json()
-          setUser(userData)
-          fetchUniversities()
-        } else {
-          router.push("/")
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error)
-        router.push("/")
-      }
-    }
-
-    checkAuth()
-  }, [router])
-
-  const fetchUniversities = async () => {
+  const fetchUniversities = useCallback(async () => {
     try {
       const params = new URLSearchParams()
       Object.entries(searchParams).forEach(([key, value]) => {
@@ -77,13 +54,42 @@ export default function UniversitiesPage() {
         const data = await response.json()
         setUniversities(data.universities)
       }
-    } catch (error) {
-      console.error("Failed to fetch universities:", error)
+    } catch (_error) {
+      console.error("Failed to fetch universities:", _error)
     } finally {
       setLoading(false)
       setSearchLoading(false)
     }
-  }
+  }, [searchParams])
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/auth/me", {
+          credentials: "include"
+        })
+        
+        if (response.ok) {
+          const userData = await response.json()
+          setUser(userData)
+          fetchUniversities()
+        } else {
+          router.push("/")
+        }
+      } catch (_error) {
+        console.error("Auth check failed:", _error)
+        router.push("/")
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
+  useEffect(() => {
+    if (user) {
+      fetchUniversities()
+    }
+  }, [user, fetchUniversities])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

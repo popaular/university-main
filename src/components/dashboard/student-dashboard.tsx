@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react"
-import { Plus, Calendar, CheckCircle, Clock, AlertCircle, Edit, Trash2, User, Settings, TrendingUp, List } from 'lucide-react'
+import { Plus, Calendar, CheckCircle, Clock, AlertCircle, Edit, Trash2, User, List } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatDeadline, calculateProgress, getStatusColor } from '@/lib/utils'
@@ -23,6 +23,7 @@ interface Application {
     requirementType: string
     status: string
   }>
+  notes?: string
 }
 
 interface StudentDashboardProps {
@@ -92,8 +93,8 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
         const data = await response.json()
         setApplications(data.applications)
       }
-    } catch (error) {
-      console.error('Error fetching applications:', error)
+    } catch (_error) {
+      console.error('Error fetching applications:', _error)
     } finally {
       setLoading(false)
     }
@@ -141,8 +142,8 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
       setEditingApplication(null)
       setEditForm({ status: '', notes: '', applicationType: '' })
       setEditError('')
-    } catch (error) {
-      console.error('Error updating application:', error)
+    } catch (_error) {
+      console.error('Error updating application:', _error)
       setEditError('网络错误，请重试')
     } finally {
       setIsSaving(false)
@@ -167,8 +168,8 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
 
       // 重新获取最新数据以确保完全同步
       await fetchApplications()
-    } catch (error) {
-      console.error('Error deleting application:', error)
+    } catch (_error) {
+      console.error('Error deleting application:', _error)
       alert('删除申请失败')
     }
   }

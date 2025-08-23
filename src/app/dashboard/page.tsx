@@ -51,8 +51,8 @@ export default function DashboardPage() {
         } else {
           router.push("/")
         }
-      } catch (error) {
-        console.error("Auth check failed:", error)
+      } catch (_error) {
+        console.error("Auth check failed:", _error)
         router.push("/")
       } finally {
         setLoading(false)

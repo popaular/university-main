@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({ applications })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -145,10 +145,10 @@ export async function POST(request: NextRequest) {
 
     // 创建默认申请要求
     const defaultRequirements = [
-      { requirementType: 'ESSAY' },
-      { requirementType: 'TRANSCRIPT' },
-      { requirementType: 'RECOMMENDATION' },
-      { requirementType: 'TEST_SCORES' },
+      { requirementType: 'ESSAY' as const },
+      { requirementType: 'TRANSCRIPT' as const },
+      { requirementType: 'RECOMMENDATION' as const },
+      { requirementType: 'TEST_SCORES' as const },
     ]
 
     await prisma.applicationRequirement.createMany({
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ application })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

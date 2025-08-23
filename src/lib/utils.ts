@@ -44,7 +44,11 @@ export function getStatusColor(status: string) {
   return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
 }
 
-export function calculateProgress(applications: any[]) {
+interface Application {
+  status: string
+}
+
+export function calculateProgress(applications: Application[]) {
   if (!applications.length) return 0
   const completed = applications.filter(app => 
     app.status === 'SUBMITTED' || app.status === 'DECISION_RECEIVED'

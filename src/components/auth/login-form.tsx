@@ -33,7 +33,7 @@ export function LoginForm() {
       } else {
         setError(data.error || '登录失败')
       }
-    } catch (error) {
+    } catch (_error) {
       setError('网络错误，请稍后重试')
     } finally {
       setLoading(false)

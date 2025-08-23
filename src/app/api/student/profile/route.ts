@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(user);
-  } catch (error) {
-    console.error('获取学生资料失败:', error);
+  } catch (_error) {
+    console.error('获取学生资料失败:', _error);
     return NextResponse.json({ error: '获取资料失败' }, { status: 500 });
   }
 }
@@ -111,8 +111,8 @@ export async function PUT(request: NextRequest) {
     });
 
     return NextResponse.json(updatedUser);
-  } catch (error) {
-    console.error('更新学生资料失败:', error);
+  } catch (_error) {
+    console.error('更新学生资料失败:', _error);
     return NextResponse.json({ error: '更新资料失败' }, { status: 500 });
   }
 }

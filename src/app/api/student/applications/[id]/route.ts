@@ -4,11 +4,12 @@ import { prisma } from '@/lib/prisma'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.cookies.get('token')?.value
     const payload = verifyToken(token || '')
+    const { id } = await params
 
     if (!payload || payload.role !== 'STUDENT') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -19,7 +20,7 @@ export async function PUT(
     // 查找申请并验证所有权
     const application = await prisma.application.findFirst({
       where: {
-        id: params.id,
+        id: id,
         studentId: payload.userId,
       },
     })
@@ -34,7 +35,7 @@ export async function PUT(
         where: {
           studentId: payload.userId,
           applicationType: 'EARLY_DECISION',
-          id: { not: params.id }, // 排除当前申请
+          id: { not: id }, // 排除当前申请
         },
       })
 
@@ -94,7 +95,7 @@ export async function PUT(
 
     // 更新申请
     const updatedApplication = await prisma.application.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...(status && { status }),
         ...(notes !== undefined && { notes }),
@@ -125,11 +126,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.cookies.get('token')?.value
     const payload = verifyToken(token || '')
+    const { id } = await params
 
     if (!payload || payload.role !== 'STUDENT') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -138,7 +140,7 @@ export async function DELETE(
     // 验证申请所有权
     const application = await prisma.application.findFirst({
       where: {
-        id: params.id,
+        id: id,
         studentId: payload.userId,
       },
     })
@@ -149,11 +151,11 @@ export async function DELETE(
 
     // 删除申请及其关联的要求
     await prisma.applicationRequirement.deleteMany({
-      where: { applicationId: params.id },
+      where: { applicationId: id },
     })
 
     await prisma.application.delete({
-      where: { id: params.id },
+      where: { id: id },
     })
 
     return NextResponse.json({ message: '申请已删除' })
