@@ -110,7 +110,7 @@ export function ApplicationTimeline() {
   useEffect(() => {
     setIsClient(true)
     fetchTimelineData()
-  }, [])
+  }, [fetchTimelineData])
 
   const getTimelineItems = () => {
     if (!isClient) return []

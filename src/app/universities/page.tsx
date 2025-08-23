@@ -83,7 +83,7 @@ export default function UniversitiesPage() {
     }
 
     checkAuth()
-  }, [router])
+  }, [router, fetchUniversities])
 
   useEffect(() => {
     if (user) {

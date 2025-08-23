@@ -89,6 +89,8 @@ export default function StudentProfilePage() {
       } catch (_error) {
         console.error("Auth check failed:", _error);
         router.push("/");
+      } finally {
+        setLoading(false);
       }
     };
 
