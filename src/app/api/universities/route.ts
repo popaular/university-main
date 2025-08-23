@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+
+interface UniversityQuery {
+  name?: { contains: string }
+  country?: string
+  usNewsRanking?: { gte?: number; lte?: number }
+  acceptanceRate?: { gte?: number; lte?: number }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,12 +18,10 @@ export async function GET(request: NextRequest) {
     const minAcceptanceRate = searchParams.get('minAcceptanceRate')
     const maxAcceptanceRate = searchParams.get('maxAcceptanceRate')
 
-    const where: Prisma.UniversityWhereInput = {}
+    const where: UniversityQuery = {}
 
     if (search) {
-      where.name = {
-        contains: search,
-      }
+      where.name = { contains: search }
     }
 
     if (country) {
@@ -36,9 +40,8 @@ export async function GET(request: NextRequest) {
       if (maxAcceptanceRate) where.acceptanceRate.lte = parseFloat(maxAcceptanceRate)
     }
 
-    const universities = await prisma.university.findMany(
-      {
-        select: {
+    const universities = await prisma.university.findMany({
+      select: {
         id: true,
         name: true,
         country: true,
@@ -52,11 +55,10 @@ export async function GET(request: NextRequest) {
         applicationFee: true,
         deadlines: true,
         requirements: true,
-        },
-        where,
-        orderBy: { usNewsRanking: 'asc' },
-      }
-    )
+      },
+      where,
+      orderBy: { usNewsRanking: 'asc' },
+    })
 
     return NextResponse.json({ universities })
   } catch (error) {
