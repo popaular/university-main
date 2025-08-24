@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { User } from "lucide-react"
 import { StudentDashboard } from "@/components/dashboard/student-dashboard"
+import { ParentDashboard } from "@/components/dashboard/parent-dashboard"
 import { Navigation } from "@/components/layout/navigation"
 
 interface User {
@@ -123,7 +124,11 @@ export default function DashboardPage() {
                 </button>
               )}
             </div>
-            {selectedStudentId && <StudentDashboard studentId={selectedStudentId} />}
+            {selectedStudentId && (
+              user.role === 'PARENT' ? 
+                <ParentDashboard studentId={selectedStudentId} /> : 
+                <StudentDashboard studentId={selectedStudentId} />
+            )}
           </>
         )}
       </div>

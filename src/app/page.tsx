@@ -1,11 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { LoginForm } from '@/components/auth/login-form'
 import { RegisterForm } from '@/components/auth/register-form'
 
 export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true)
+  
+  // 检查URL参数，自动切换到登录表单
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const tab = urlParams.get('tab')
+    if (tab === 'login') {
+      setIsLogin(true)
+    } else if (tab === 'register') {
+      setIsLogin(false)
+    }
+  }, [])
+
+  // 监听注册成功后的切换事件
+  useEffect(() => {
+    const handleSwitchToLogin = () => {
+      setIsLogin(true)
+    }
+
+    window.addEventListener('switchToLogin', handleSwitchToLogin)
+    
+    return () => {
+      window.removeEventListener('switchToLogin', handleSwitchToLogin)
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">

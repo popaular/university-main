@@ -53,6 +53,19 @@ export async function GET(request: NextRequest) {
       include: {
         university: true,
         requirements: true,
+        statusLogs: {
+          include: {
+            changedByUser: {
+              select: {
+                name: true,
+                role: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
       },
       orderBy: { deadline: 'asc' },
     })

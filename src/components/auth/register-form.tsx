@@ -18,6 +18,8 @@ export function RegisterForm() {
   const [step, setStep] = useState(1) // 注册步骤：1基本信息 2绑定学生
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
   const router = useRouter()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -52,6 +54,23 @@ export function RegisterForm() {
       }
     }
 
+    // 第二步：家长注册时必须填写学生邮箱
+    if (step === 2 && formData.role === "PARENT") {
+      if (!formData.studentEmail || formData.studentEmail.trim() === "") {
+        setError("请输入学生邮箱账号")
+        setLoading(false)
+        return
+      }
+      
+      // 验证学生邮箱格式
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.studentEmail)) {
+        setError("请输入有效的学生邮箱地址")
+        setLoading(false)
+        return
+      }
+    }
+
     try {
       const payload: Record<string, unknown> = {
         name: formData.name,
@@ -79,8 +98,17 @@ export function RegisterForm() {
         throw new Error(data.error || "注册失败")
       }
 
-      // 注册成功后跳转到仪表板
-      router.push("/dashboard")
+      // 注册成功后显示成功弹窗
+      const roleText = formData.role === 'PARENT' ? '家长' : '学生'
+      setSuccessMessage(`${roleText}账号注册成功！`)
+      setShowSuccessModal(true)
+      
+      // 3秒后自动切换到登录表单
+      setTimeout(() => {
+        setShowSuccessModal(false)
+        // 触发父组件的切换事件
+        window.dispatchEvent(new CustomEvent('switchToLogin'))
+      }, 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败")
     } finally {
@@ -184,7 +212,7 @@ export function RegisterForm() {
           ) : (
             <div>
               <label htmlFor="studentEmail" className="block text-sm font-medium mb-2 text-gray-800">
-                学生邮箱
+                学生邮箱 <span className="text-red-500">*</span>
               </label>
               <Input
                 id="studentEmail"
@@ -194,9 +222,10 @@ export function RegisterForm() {
                 value={formData.studentEmail}
                 onChange={handleChange}
                 required
+                className="border-red-300 focus:border-red-500 focus:ring-red-500"
               />
-              <p className="text-sm text-gray-600 mt-1">
-                请确保学生已注册账号，且邮箱填写正确
+              <p className="text-sm text-red-600 mt-1">
+                <span className="font-medium">必填项：</span>请输入您要管理的学生邮箱账号，该学生必须已注册为学生账号
               </p>
             </div>
           )}
@@ -223,18 +252,34 @@ export function RegisterForm() {
           </div>
         </form>
 
-        <div className="mt-4 text-center">
-          <span className="text-sm text-gray-600">
-            已有账号？
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="text-blue-600 hover:underline ml-1"
-            >
-              立即登录
-            </button>
-          </span>
-        </div>
+        {/* 成功弹窗 */}
+        {showSuccessModal && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-green-800">注册成功！</h3>
+                <p className="text-xs text-green-600 mt-1">{successMessage}</p>
+                <p className="text-xs text-green-500 mt-1">3秒后自动切换到登录表单...</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setShowSuccessModal(false)
+                  // 触发父组件的切换事件
+                  window.dispatchEvent(new CustomEvent('switchToLogin'))
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1"
+              >
+                立即登录
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

@@ -2,6 +2,234 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const token = request.cookies.get('token')?.value
+    const payload = verifyToken(token || '')
+
+    if (!payload) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    const application = await prisma.application.findUnique({
+      where: { id },
+      include: {
+        university: true,
+        requirements: true,
+        statusLogs: {
+          include: {
+            changedByUser: {
+              select: {
+                name: true,
+                role: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      },
+    })
+
+    if (!application) {
+      return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+    }
+
+    // 检查权限
+    if (payload.role === 'STUDENT' && application.studentId !== payload.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (payload.role === 'PARENT') {
+      const hasAccess = await prisma.parentStudent.findFirst({
+        where: {
+          parentId: payload.userId,
+          studentId: application.studentId,
+        },
+      })
+
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    return NextResponse.json({ application })
+  } catch (error) {
+    console.error('Error fetching application:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const token = request.cookies.get('token')?.value
+    const payload = verifyToken(token || '')
+
+    if (!payload) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const { status, reason } = await request.json()
+
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Status is required' },
+        { status: 400 }
+      )
+    }
+
+    // 获取当前申请信息
+    const currentApplication = await prisma.application.findUnique({
+      where: { id },
+      select: { 
+        id: true, 
+        status: true, 
+        studentId: true 
+      }
+    })
+
+    if (!currentApplication) {
+      return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+    }
+
+    // 检查权限
+    if (payload.role === 'STUDENT' && currentApplication.studentId !== payload.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (payload.role === 'PARENT') {
+      const hasAccess = await prisma.parentStudent.findFirst({
+        where: {
+          parentId: payload.userId,
+          studentId: currentApplication.studentId,
+        },
+      })
+
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    // 使用事务来更新状态和记录变更历史
+    let result
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        // 更新申请状态
+        const updatedApplication = await tx.application.update({
+          where: { id },
+          data: { status },
+          include: {
+            university: true,
+            requirements: true,
+            statusLogs: {
+              include: {
+                changedByUser: {
+                  select: {
+                    name: true,
+                    role: true
+                  }
+                }
+              },
+              orderBy: {
+                createdAt: 'desc'
+              }
+            }
+          }
+        })
+
+        // 记录状态变更历史
+        if (currentApplication.status !== status) {
+          await tx.applicationStatusLog.create({
+            data: {
+              applicationId: id,
+              oldStatus: currentApplication.status,
+              newStatus: status,
+              changedBy: payload.userId,
+              changedByRole: payload.role,
+              reason: reason || null,
+            },
+          })
+        }
+
+        return updatedApplication
+      }, {
+        timeout: 10000, // 10秒超时
+        maxWait: 5000,  // 最大等待时间
+      })
+    } catch (transactionError) {
+      console.error('Transaction failed:', transactionError)
+      
+      // 如果事务失败，尝试不使用事务的简单更新
+      try {
+        console.log('Falling back to non-transactional update...')
+        
+        // 先更新申请状态
+        const updatedApplication = await prisma.application.update({
+          where: { id },
+          data: { status },
+          include: {
+            university: true,
+            requirements: true,
+            statusLogs: {
+              include: {
+                changedByUser: {
+                  select: {
+                    name: true,
+                    role: true
+                  }
+                }
+              },
+              orderBy: {
+                createdAt: 'desc'
+              }
+            }
+          }
+        })
+
+        // 再记录状态变更历史
+        if (currentApplication.status !== status) {
+          await prisma.applicationStatusLog.create({
+            data: {
+              applicationId: id,
+              oldStatus: currentApplication.status,
+              newStatus: status,
+              changedBy: payload.userId,
+              changedByRole: payload.role,
+              reason: reason || null,
+            },
+          })
+        }
+
+        result = updatedApplication
+      } catch (fallbackError) {
+        console.error('Fallback update also failed:', fallbackError)
+        throw new Error('Failed to update application status')
+      }
+    }
+
+    return NextResponse.json({ application: result })
+  } catch (error) {
+    console.error('Error updating application:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -9,97 +237,50 @@ export async function PUT(
   try {
     const token = request.cookies.get('token')?.value
     const payload = verifyToken(token || '')
-    const { id } = await params
 
-    if (!payload || payload.role !== 'STUDENT') {
+    if (!payload) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { status, notes, deadline, applicationType } = await request.json()
+    const { id } = await params
+    const { notes, applicationType } = await request.json()
 
-    // 查找申请并验证所有权
-    const application = await prisma.application.findFirst({
-      where: {
-        id: id,
-        studentId: payload.userId,
-      },
+    // 获取当前申请信息
+    const application = await prisma.application.findUnique({
+      where: { id },
+      select: { 
+        id: true, 
+        studentId: true 
+      }
     })
 
     if (!application) {
-      return NextResponse.json({ error: '申请未找到' }, { status: 404 })
+      return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
-    // 如果修改申请类型为ED，检查是否已存在其他ED申请
-    if (applicationType === 'EARLY_DECISION' && application.applicationType !== 'EARLY_DECISION') {
-      const existingEDApplication = await prisma.application.findFirst({
+    // 检查权限
+    if (payload.role === 'STUDENT' && application.studentId !== payload.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (payload.role === 'PARENT') {
+      const hasAccess = await prisma.parentStudent.findFirst({
         where: {
-          studentId: payload.userId,
-          applicationType: 'EARLY_DECISION',
-          id: { not: id }, // 排除当前申请
+          parentId: payload.userId,
+          studentId: application.studentId,
         },
       })
 
-      if (existingEDApplication) {
-        return NextResponse.json(
-          { error: '您已经有一个提前决定(Early Decision)申请' },
-          { status: 409 }
-        )
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
 
-    // 截止日期验证（如果提供）
-    if (deadline) {
-      const deadlineDate = new Date(deadline)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-
-      if (isNaN(deadlineDate.getTime())) {
-        return NextResponse.json(
-          { error: '无效的截止日期格式' },
-          { status: 400 }
-        )
-      }
-
-      if (deadlineDate < today) {
-        return NextResponse.json(
-          { error: '截止日期不能早于今天' },
-          { status: 400 }
-        )
-      }
-    }
-
-    // 状态流转验证
-    if (status && status !== application.status) {
-      const currentStatus = application.status
-      const newStatus = status
-      
-      // 定义允许的状态流转路径
-      const validTransitions: Record<string, string[]> = {
-        'NOT_STARTED': ['IN_PROGRESS'],
-        'IN_PROGRESS': ['SUBMITTED', 'ACCEPTED', 'REJECTED', 'WAITLISTED'],
-        'SUBMITTED': ['UNDER_REVIEW', 'ACCEPTED', 'REJECTED', 'WAITLISTED'],
-        'UNDER_REVIEW': ['ACCEPTED', 'REJECTED', 'WAITLISTED'],
-        'ACCEPTED': [], // 终态，不能修改
-        'REJECTED': [], // 终态，不能修改
-        'WAITLISTED': ['ACCEPTED', 'REJECTED'] // 等待名单可以转为录取或拒绝
-      }
-
-      const allowedTransitions = validTransitions[currentStatus] || []
-      if (!allowedTransitions.includes(newStatus)) {
-        return NextResponse.json(
-          { error: `不允许的状态修改：从 ${currentStatus.replace('_', ' ')} 到 ${newStatus.replace('_', ' ')}` },
-          { status: 400 }
-        )
-      }
-    }
-
-    // 更新申请
+    // 更新申请的非状态字段
     const updatedApplication = await prisma.application.update({
-      where: { id: id },
+      where: { id },
       data: {
-        ...(status && { status }),
         ...(notes !== undefined && { notes }),
-        ...(deadline && { deadline: new Date(deadline) }),
         ...(applicationType && { applicationType }),
       },
       include: {
@@ -111,6 +292,19 @@ export async function PUT(
           },
         },
         requirements: true,
+        statusLogs: {
+          include: {
+            changedByUser: {
+              select: {
+                name: true,
+                role: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
       },
     })
 

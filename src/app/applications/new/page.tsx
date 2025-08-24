@@ -94,6 +94,13 @@ export default function NewApplicationPage() {
         if (response.ok) {
           const userData = await response.json()
           setUser(userData)
+          
+          // 检查用户角色，只有学生才能创建申请
+          if (userData.role !== 'STUDENT') {
+            router.push("/dashboard")
+            return
+          }
+          
           fetchUniversities()
           fetchExistingApplications()
         } else {
@@ -102,6 +109,8 @@ export default function NewApplicationPage() {
       } catch (_error) {
         console.error("Auth check failed:", _error)
         router.push("/")
+      } finally {
+        setLoading(false)
       }
     }
 

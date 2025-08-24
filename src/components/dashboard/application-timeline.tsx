@@ -12,7 +12,8 @@ import {
   Award,
   FileText,
   Plus,
-  User
+  User,
+  Edit
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,19 @@ interface Application {
     status: string
     completedAt?: string
   }>
+  statusLogs: Array<{
+    id: string
+    oldStatus: string
+    newStatus: string
+    changedBy: string
+    changedByRole: string
+    reason?: string
+    createdAt: string
+    changedByUser: {
+      name: string
+      role: string
+    }
+  }>
   notes?: string
   createdAt: string
   updatedAt: string
@@ -51,9 +65,17 @@ interface TimelineStats {
   urgentDeadlines: number
 }
 
-export function ApplicationTimeline() {
+interface ApplicationTimelineProps {
+  userRole?: 'STUDENT' | 'PARENT'
+}
+
+export function ApplicationTimeline({ userRole = 'STUDENT' }: ApplicationTimelineProps) {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
+  const [showStatusSelector, setShowStatusSelector] = useState<string | null>(null)
+  const [selectedStatus, setSelectedStatus] = useState<string>('')
+  const [statusReason, setStatusReason] = useState<string>('')
   const [timelineStats, setTimelineStats] = useState<TimelineStats>({
     totalApplications: 0,
     upcomingDeadlines: 0,
@@ -64,7 +86,13 @@ export function ApplicationTimeline() {
   const [isClient, setIsClient] = useState(false)
 
   const calculateTimelineStats = useCallback((apps: Application[]) => {
-    if (!isClient) return
+    if (!isClient) return {
+      totalApplications: 0,
+      upcomingDeadlines: 0,
+      completedApplications: 0,
+      averageProgress: 0,
+      urgentDeadlines: 0
+    }
     
     const now = new Date()
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
@@ -89,7 +117,7 @@ export function ApplicationTimeline() {
       }).length
     }
 
-    setTimelineStats(stats)
+    return stats
   }, [isClient])
 
   const fetchTimelineData = useCallback(async () => {
@@ -98,7 +126,9 @@ export function ApplicationTimeline() {
       if (response.ok) {
         const data = await response.json()
         setApplications(data.applications)
-        calculateTimelineStats(data.applications)
+        setTimelineStats(calculateTimelineStats(data.applications))
+      } else {
+        console.error('Failed to fetch applications')
       }
     } catch (error) {
       console.error('Error fetching timeline data:', error)
@@ -106,6 +136,45 @@ export function ApplicationTimeline() {
       setLoading(false)
     }
   }, [calculateTimelineStats])
+
+  const updateApplicationStatus = async (applicationId: string, newStatus: string, reason?: string) => {
+    try {
+      setUpdatingStatus(applicationId)
+      const response = await fetch(`/api/student/applications/${applicationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, reason }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // 更新本地状态
+        setApplications(prev => 
+          prev.map(app => 
+            app.id === applicationId ? data.application : app
+          )
+        )
+        // 重新计算统计
+        setTimelineStats(calculateTimelineStats(applications))
+        // 关闭状态选择器
+        setShowStatusSelector(null)
+        setSelectedStatus('')
+        setStatusReason('')
+      } else {
+        console.error('Failed to update status')
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+    } finally {
+      setUpdatingStatus(null)
+    }
+  }
+
+  const handleStatusUpdate = (applicationId: string) => {
+    if (selectedStatus) {
+      updateApplicationStatus(applicationId, selectedStatus, statusReason || undefined)
+    }
+  }
 
   useEffect(() => {
     setIsClient(true)
@@ -120,7 +189,7 @@ export function ApplicationTimeline() {
       new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
     )
 
-    return sortedApps.map(app => {
+    const items = sortedApps.map(app => {
       const deadline = new Date(app.deadline)
       const daysUntilDeadline = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       const progress = calculateProgress([app])
@@ -132,6 +201,19 @@ export function ApplicationTimeline() {
         urgency: daysUntilDeadline <= 7 ? 'urgent' : daysUntilDeadline <= 30 ? 'soon' : 'normal'
       }
     })
+
+    // 调试信息
+    console.log('=== getTimelineItems 结果 ===')
+    items.forEach((item, index) => {
+      console.log(`Timeline Item ${index + 1}:`, {
+        id: item.id,
+        university: item.university?.name,
+        statusLogsCount: item.statusLogs?.length || 0,
+        hasStatusLogs: !!item.statusLogs && item.statusLogs.length > 0
+      })
+    })
+
+    return items
   }
 
   const getStatusIcon = (status: string) => {
@@ -233,13 +315,13 @@ export function ApplicationTimeline() {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <div>
-              <CardTitle className="text-xl">申请时间线</CardTitle>
-              <CardDescription>按截止日期排序的申请进度</CardDescription>
-            </div>
-            <Button variant="outline" size="sm">
-              筛选
-            </Button>
+            <h2 className="text-xl font-semibold">申请时间线</h2>
+            {userRole === 'STUDENT' && (
+              <Button onClick={() => window.location.href = '/applications/new'}>
+                <Plus className="h-4 w-4 mr-2" />
+                创建新申请
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -247,13 +329,15 @@ export function ApplicationTimeline() {
             <div className="text-center py-12">
               <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">还没有创建任何申请</p>
-              <Button 
-                className="mt-4" 
-                variant="outline"
-                onClick={() => window.location.href = '/applications/new'}
-              >
-                创建第一个申请
-              </Button>
+              {userRole === 'STUDENT' && (
+                <Button 
+                  className="mt-4" 
+                  variant="outline"
+                  onClick={() => window.location.href = '/applications/new'}
+                >
+                  创建第一个申请
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -325,6 +409,43 @@ export function ApplicationTimeline() {
                         </div>
                       )}
 
+                      {/* Status Change History */}
+                      <div className="mt-3">
+                        <div className="border-t pt-3">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">状态变更历史</h4>
+                          
+                          {item.statusLogs && item.statusLogs.length > 0 ? (
+                            <div className="space-y-2">
+                              {item.statusLogs.slice(0, 3).map((log) => (
+                                <div key={log.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-gray-600">
+                                      {log.oldStatus.replace('_', ' ')} → {log.newStatus.replace('_', ' ')}
+                                    </span>
+                                    {log.reason && (
+                                      <span className="text-gray-500">({log.reason})</span>
+                                    )}
+                                  </div>
+                                  <div className="text-right text-gray-500">
+                                    <div>{log.changedByUser.name}</div>
+                                    <div className="text-xs">{new Date(log.createdAt).toLocaleDateString('zh-CN')}</div>
+                                  </div>
+                                </div>
+                              ))}
+                              {item.statusLogs.length > 3 && (
+                                <div className="text-xs text-gray-500 text-center">
+                                  还有 {item.statusLogs.length - 3} 条记录...
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-400 text-center py-2">
+                              暂无状态变更记录
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       {/* Action buttons */}
                       <div className="mt-3 flex space-x-2">
                         <Button 
@@ -341,7 +462,78 @@ export function ApplicationTimeline() {
                             开始申请
                           </Button>
                         )}
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => setShowStatusSelector(item.id)}
+                          disabled={updatingStatus === item.id}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          {updatingStatus === item.id ? '更新中...' : '更新状态'}
+                        </Button>
                       </div>
+
+                      {/* Status Update Selector */}
+                      {showStatusSelector === item.id && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                选择新状态
+                              </label>
+                              <select
+                                value={selectedStatus}
+                                onChange={(e) => setSelectedStatus(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              >
+                                <option value="">请选择状态</option>
+                                <option value="NOT_STARTED">未开始</option>
+                                <option value="IN_PROGRESS">进行中</option>
+                                <option value="SUBMITTED">已提交</option>
+                                <option value="UNDER_REVIEW">审核中</option>
+                                <option value="DECISION_RECEIVED">收到决定</option>
+                                <option value="INTERVIEW_SCHEDULED">面试已安排</option>
+                                <option value="ACCEPTED">已录取</option>
+                                <option value="REJECTED">被拒绝</option>
+                                <option value="WAITLISTED">等待名单</option>
+                                <option value="DEFERRED">延期</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                变更原因 (可选)
+                              </label>
+                              <input
+                                type="text"
+                                value={statusReason}
+                                onChange={(e) => setStatusReason(e.target.value)}
+                                placeholder="请输入状态变更原因"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleStatusUpdate(item.id)}
+                                disabled={!selectedStatus || updatingStatus === item.id}
+                              >
+                                确认更新
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setShowStatusSelector(null)
+                                  setSelectedStatus('')
+                                  setStatusReason('')
+                                }}
+                              >
+                                取消
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Calendar, CheckCircle, Clock, AlertCircle, Edit, Trash2, User, List } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatDeadline, calculateProgress, getStatusColor } from '@/lib/utils'
+import { calculateProgress } from '@/lib/utils'
 import { ApplicationTimeline } from './application-timeline'
 
 interface Application {
@@ -22,6 +22,19 @@ interface Application {
     id: string
     requirementType: string
     status: string
+  }>
+  statusLogs: Array<{
+    id: string
+    oldStatus: string
+    newStatus: string
+    changedBy: string
+    changedByRole: string
+    reason?: string
+    createdAt: string
+    changedByUser: {
+      name: string
+      role: string
+    }
   }>
   notes?: string
 }
@@ -43,6 +56,7 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
   const [editError, setEditError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [viewMode, setViewMode] = useState<'cards' | 'timeline'>('cards')
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
 
   // 获取允许的状态选项
   const getAllowedStatusOptions = (currentStatus: string) => {
@@ -117,23 +131,47 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
     setIsSaving(true)
     
     try {
-      const response = await fetch(`/api/student/applications/${editingApplication.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...(editForm.status && { status: editForm.status }),
-          ...(editForm.notes && { notes: editForm.notes }),
-          ...(editForm.applicationType && { applicationType: editForm.applicationType }),
-        }),
-      })
+      // 如果状态改变了，使用PATCH方法更新状态并创建日志
+      if (editForm.status && editForm.status !== editingApplication.status) {
+        const statusResponse = await fetch(`/api/student/applications/${editingApplication.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: editForm.status,
+            reason: editForm.notes || undefined, // 使用备注作为状态变更原因
+          }),
+        })
 
-      const data = await response.json()
+        if (!statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          setEditError(statusData.error || '状态更新失败')
+          return
+        }
+      }
 
-      if (!response.ok) {
-        setEditError(data.error || '更新失败')
-        return
+      // 如果其他字段改变了，使用PUT方法更新
+      const hasOtherChanges = editForm.notes !== (editingApplication.notes || '') || 
+                             editForm.applicationType !== editingApplication.applicationType
+      
+      if (hasOtherChanges) {
+        const otherResponse = await fetch(`/api/student/applications/${editingApplication.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...(editForm.notes && { notes: editForm.notes }),
+            ...(editForm.applicationType && { applicationType: editForm.applicationType }),
+          }),
+        })
+
+        if (!otherResponse.ok) {
+          const otherData = await otherResponse.json()
+          setEditError(otherData.error || '其他字段更新失败')
+          return
+        }
       }
 
       // 重新获取最新数据以确保完全同步
@@ -184,6 +222,42 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
         return <Clock className="h-5 w-5 text-orange-600" />
       default:
         return <Calendar className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'NOT_STARTED':
+        return 'bg-gray-100 text-gray-800'
+      case 'IN_PROGRESS':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'SUBMITTED':
+        return 'bg-blue-100 text-blue-800'
+      case 'UNDER_REVIEW':
+        return 'bg-purple-100 text-purple-800'
+      case 'ACCEPTED':
+        return 'bg-green-100 text-green-800'
+      case 'REJECTED':
+        return 'bg-red-100 text-red-800'
+      case 'WAITLISTED':
+        return 'bg-orange-100 text-orange-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getDeadlineColor = (deadline: string) => {
+    const today = new Date()
+    const deadlineDate = new Date(deadline)
+    const timeDiff = deadlineDate.getTime() - today.getTime()
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24))
+    
+    if (daysDiff < 0) {
+      return { color: 'bg-red-100 text-red-800', text: '已到期' }
+    } else if (daysDiff <= 15) {
+      return { color: 'bg-orange-100 text-orange-800', text: '即将到期' }
+    } else {
+      return { color: 'bg-green-100 text-green-800', text: '正常' }
     }
   }
 
@@ -364,9 +438,14 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">截止日期:</span>
-                    <span className={`text-sm font-medium px-2 py-1 rounded ${formatDeadline(application.deadline).color}`}>
-                      {formatDeadline(application.deadline).text}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-sm font-medium px-2 py-1 rounded ${getDeadlineColor(application.deadline).color}`}>
+                        {new Date(application.deadline).toLocaleDateString('zh-CN')}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${getDeadlineColor(application.deadline).color}`}>
+                        {getDeadlineColor(application.deadline).text}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <span className="text-sm text-gray-600">要求进度:</span>
@@ -389,6 +468,74 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Status Change History */}
+                  {application.statusLogs && application.statusLogs.length > 0 && (
+                    <div className="border-t pt-3">
+                      <span className="text-sm text-gray-600">状态变更历史:</span>
+                      <div className="mt-2 space-y-2">
+                        {application.statusLogs.slice(0, 3).map((log) => (
+                          <div key={log.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-gray-600">
+                                {log.oldStatus.replace('_', ' ')} → {log.newStatus.replace('_', ' ')}
+                              </span>
+                              {log.reason && (
+                                <span className="text-gray-500">({log.reason})</span>
+                              )}
+                            </div>
+                            <div className="text-right text-gray-500">
+                              <div>{log.changedByUser.name}</div>
+                              <div className="text-xs">{new Date(log.createdAt).toLocaleDateString('zh-CN')}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {application.statusLogs.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center">
+                            <button 
+                              className="text-blue-600 hover:text-blue-800 underline"
+                              onClick={() => {
+                                const newExpanded = new Set(expandedLogs);
+                                if (newExpanded.has(application.id)) {
+                                  newExpanded.delete(application.id);
+                                } else {
+                                  newExpanded.add(application.id);
+                                }
+                                setExpandedLogs(newExpanded);
+                              }}
+                            >
+                              {expandedLogs.has(application.id) 
+                                ? '收起' 
+                                : `展开查看全部 ${application.statusLogs.length - 3} 条记录`
+                              }
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* 展开后的额外记录 */}
+                        {expandedLogs.has(application.id) && application.statusLogs.length > 3 && (
+                          <div className="space-y-2">
+                            {application.statusLogs.slice(3).map((log) => (
+                              <div key={log.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-gray-600">
+                                    {log.oldStatus.replace('_', ' ')} → {log.newStatus.replace('_', ' ')}
+                                  </span>
+                                  {log.reason && (
+                                    <span className="text-gray-500">({log.reason})</span>
+                                  )}
+                                </div>
+                                <div className="text-right text-gray-500">
+                                  <div>{log.changedByUser.name}</div>
+                                  <div className="text-xs">{new Date(log.createdAt).toLocaleDateString('zh-CN')}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -399,7 +546,7 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
       {/* Timeline View */}
       {viewMode === 'timeline' && (
         <div>
-          <ApplicationTimeline />
+          <ApplicationTimeline userRole="STUDENT" />
         </div>
       )}
 

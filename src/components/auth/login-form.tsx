@@ -93,18 +93,6 @@ export function LoginForm() {
           <span className="text-gray-600">家长：parent@example.com / password</span>
         </div>
 
-        <div className="mt-4 text-center">
-          <span className="text-sm text-gray-700">
-            还没有账号？
-            <button
-              type="button"
-              onClick={() => router.push("/register")}
-              className="text-blue-600 hover:underline ml-1"
-            >
-              立即注册
-            </button>
-          </span>
-        </div>
       </CardContent>
     </Card>
   )
