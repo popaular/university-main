@@ -4,7 +4,5 @@ buildCommand = "npm run db:generate && npm run build"
 
 [deploy]
 startCommand = "npm start"
-healthcheckPath = "/api/auth/login"
-healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
