@@ -24,8 +24,8 @@ model User {
   gpa           Float?
   satScore      Int?
   actScore      Int?
-  targetCountries String? // JSON stringified array
-  intendedMajors  String? // JSON stringified array
+  targetCountries Json? // JSON array
+  intendedMajors  Json? // JSON array
 
   // Relations
   applications Application[]
