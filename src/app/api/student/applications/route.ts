@@ -65,6 +65,16 @@ export async function GET(request: NextRequest) {
           orderBy: {
             createdAt: 'desc'
           }
+        },
+        financialPlan: {
+          include: {
+            parent: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
         }
       },
       orderBy: { deadline: 'asc' },

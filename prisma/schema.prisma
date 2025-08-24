@@ -33,6 +33,7 @@ model User {
   notes           Note[]
   parentChildren  ParentStudent[]        @relation("ParentRelation")
   studentChildren ParentStudent[]        @relation("StudentRelation")
+  createdFinancialPlans FinancialPlan[]  @relation("ParentFinancialPlan")
 
   @@map("users")
 }
@@ -77,6 +78,7 @@ model Application {
   university      University               @relation(fields: [universityId], references: [id])
   requirements    ApplicationRequirement[]
   statusLogs      ApplicationStatusLog[]
+  financialPlan   FinancialPlan?
 
   @@map("applications")
 }
@@ -96,6 +98,27 @@ model ApplicationStatusLog {
   changedByUser User              @relation("StatusLogUser", fields: [changedBy], references: [id])
 
   @@map("application_status_logs")
+}
+
+model FinancialPlan {
+  id                String    @id @default(cuid())
+  applicationId     String    @unique // 一个申请只能有一个财务规划
+  parentId          String    // 创建者（家长）
+  tuition           Float?
+  roomAndBoard      Float?
+  booksAndSupplies  Float?
+  personalExpenses  Float?
+  transportation    Float?
+  otherFees         Float?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  application       Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  parent            User        @relation("ParentFinancialPlan", fields: [parentId], references: [id])
+
+  @@map("financial_plans")
 }
 
 model ApplicationRequirement {

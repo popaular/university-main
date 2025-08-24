@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react"
-import { DollarSign, Calculator, TrendingUp, BookOpen, CheckCircle, AlertCircle, Clock, Edit } from 'lucide-react'
+import { DollarSign, Calculator, TrendingUp, BookOpen, CheckCircle, AlertCircle, Clock, Edit, Plus } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -35,9 +35,37 @@ interface Application {
     }
   }>
   notes?: string
+  financialPlan?: FinancialPlan
 }
 
 interface FinancialPlan {
+  id: string
+  applicationId: string
+  parentId: string
+  tuition?: number
+  roomAndBoard?: number
+  booksAndSupplies?: number
+  personalExpenses?: number
+  transportation?: number
+  otherFees?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  application: {
+    id: string
+    university: {
+      name: string
+      country: string
+    }
+  }
+  parent: {
+    id: string
+    name: string
+    email: string
+  }
+}
+
+interface FinancialPlanForm {
   tuition?: number
   roomAndBoard?: number
   booksAndSupplies?: number
@@ -53,17 +81,19 @@ interface ParentDashboardProps {
 export function ParentDashboard({ studentId }: ParentDashboardProps) {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'overview' | 'financial'>('overview')
-  const [financialPlans, setFinancialPlans] = useState<Record<string, FinancialPlan>>({})
+  // 移除 viewMode 状态，因为不再需要标签页切换
+  
+  // 编辑备注状态
   const [editingApplication, setEditingApplication] = useState<Application | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editForm, setEditForm] = useState({
-    notes: ''
-  })
+  const [editForm, setEditForm] = useState({ notes: '' })
   const [editError, setEditError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  
+  // 财务规划状态
   const [showFinancialPlanModal, setShowFinancialPlanModal] = useState(false)
-  const [financialPlanForm, setFinancialPlanForm] = useState<FinancialPlan>({
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string>('')
+  const [financialPlanForm, setFinancialPlanForm] = useState<FinancialPlanForm>({
     tuition: undefined,
     roomAndBoard: undefined,
     booksAndSupplies: undefined,
@@ -75,7 +105,6 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
   useEffect(() => {
     if (studentId) {
       fetchApplications(studentId)
-      fetchFinancialPlans(studentId)
     }
   }, [studentId])
 
@@ -86,27 +115,11 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
         const data = await response.json()
         setApplications(data.applications)
       }
-    } catch (_error) {
-      console.error('Error fetching applications:', _error)
+    } catch (error) {
+      console.error('Error fetching applications:', error)
     } finally {
       setLoading(false)
     }
-  }
-
-  const fetchFinancialPlans = async (_targetStudentId: string) => {
-    // 这里可以调用API获取财务规划数据
-    // 暂时使用模拟数据
-    const mockPlans: Record<string, FinancialPlan> = {
-      'cmemeyr5h00002fb3fdv99h31': {
-        tuition: 45000,
-        roomAndBoard: 15000,
-        booksAndSupplies: 2000,
-        personalExpenses: 3000,
-        transportation: 2000,
-        otherFees: 1500
-      }
-    }
-    setFinancialPlans(mockPlans)
   }
 
   const handleEditNotes = (application: Application) => {
@@ -116,37 +129,6 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
     })
     setShowEditModal(true)
     setEditError('')
-  }
-
-  const handleCreateFinancialPlan = () => {
-    setShowFinancialPlanModal(true)
-    // 重置表单为空值
-    setFinancialPlanForm({
-      tuition: undefined,
-      roomAndBoard: undefined,
-      booksAndSupplies: undefined,
-      personalExpenses: undefined,
-      transportation: undefined,
-      otherFees: undefined
-    })
-  }
-
-  const handleSaveFinancialPlan = async () => {
-    try {
-      // 这里可以调用API保存财务规划
-      // 暂时更新本地状态
-      const newPlan: FinancialPlan = { ...financialPlanForm }
-      setFinancialPlans(prev => ({
-        ...prev,
-        [studentId]: newPlan
-      }))
-      
-      setShowFinancialPlanModal(false)
-      // 切换到财务视图
-      setViewMode('financial')
-    } catch (error) {
-      console.error('保存财务规划失败:', error)
-    }
   }
 
   const handleSaveNotes = async () => {
@@ -172,17 +154,68 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
         return
       }
 
-      // 重新获取最新数据以确保完全同步
+      // 重新获取最新数据
       await fetchApplications(studentId)
       setShowEditModal(false)
       setEditingApplication(null)
       setEditForm({ notes: '' })
       setEditError('')
-    } catch (_error) {
-      console.error('Error updating notes:', _error)
+    } catch (error) {
+      console.error('Error updating notes:', error)
       setEditError('网络错误，请重试')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleCreateFinancialPlan = (applicationId: string) => {
+    setSelectedApplicationId(applicationId)
+    setShowFinancialPlanModal(true)
+    // 重置表单为空值
+    setFinancialPlanForm({
+      tuition: undefined,
+      roomAndBoard: undefined,
+      booksAndSupplies: undefined,
+      personalExpenses: undefined,
+      transportation: undefined,
+      otherFees: undefined
+    })
+  }
+
+  const handleSaveFinancialPlan = async () => {
+    try {
+      // 调用API保存财务规划
+      const response = await fetch('/api/financial-plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          applicationId: selectedApplicationId,
+          tuition: financialPlanForm.tuition,
+          roomAndBoard: financialPlanForm.roomAndBoard,
+          booksAndSupplies: financialPlanForm.booksAndSupplies,
+          personalExpenses: financialPlanForm.personalExpenses,
+          transportation: financialPlanForm.transportation,
+          otherFees: financialPlanForm.otherFees,
+          notes: ''
+        }),
+      })
+
+      if (response.ok) {
+        // 重新获取申请数据，包含新的财务规划
+        await fetchApplications(studentId)
+        setShowFinancialPlanModal(false)
+        setSelectedApplicationId('')
+        // 财务规划创建成功
+      } else {
+        const errorData = await response.json()
+        console.error('保存财务规划失败:', errorData.error)
+        alert('保存失败: ' + errorData.error)
+      }
+    } catch (error) {
+      console.error('保存财务规划失败:', error)
+      alert('网络错误，请稍后重试')
     }
   }
 
@@ -193,7 +226,7 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
       case 'REJECTED':
         return <AlertCircle className="h-5 w-5 text-red-600" />
       case 'WAITLISTED':
-        return <Clock className="h-5 w-3.5 text-orange-600" />
+        return <Clock className="h-5 w-5 text-orange-600" />
       default:
         return <BookOpen className="h-5 w-5 text-gray-600" />
     }
@@ -235,7 +268,7 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
     }
   }
 
-  const calculateTotalCost = (plan: FinancialPlan) => {
+  const calculateTotalCost = (plan: FinancialPlanForm) => {
     return (plan.tuition || 0) + (plan.roomAndBoard || 0) + (plan.booksAndSupplies || 0) + 
            (plan.personalExpenses || 0) + (plan.transportation || 0) + (plan.otherFees || 0)
   }
@@ -243,360 +276,319 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
   const getQuickStats = () => {
     const total = applications.length
     const submitted = applications.filter(app => app.status === 'SUBMITTED').length
-    const accepted = applications.filter(app => app.decisionType === 'ACCEPTED').length
-    const pending = applications.filter(app => 
-      app.status === 'NOT_STARTED' || app.status === 'IN_PROGRESS'
-    ).length
-
-    return { total, submitted, accepted, pending }
+    const accepted = applications.filter(app => app.status === 'ACCEPTED').length
+    const withFinancialPlan = applications.filter(app => app.financialPlan).length
+    
+    return { total, submitted, accepted, withFinancialPlan }
   }
 
   const stats = getQuickStats()
-  const currentFinancialPlan = financialPlans[studentId]
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header with View Toggle */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">家长仪表板</h1>
-        <div className="flex space-x-2">
-          <Button
-            variant={viewMode === 'overview' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('overview')}
-          >
-            <BookOpen className="h-4 w-4 mr-2" />
-            申请概览
-          </Button>
-          <Button
-            variant={viewMode === 'financial' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('financial')}
-          >
-            <DollarSign className="h-4 w-4 mr-2" />
-            财务规划
-          </Button>
+        <h1 className="text-2xl font-bold">学生申请概览</h1>
+        <div>
+        
         </div>
       </div>
 
-      {/* Overview View */}
-      {viewMode === 'overview' && (
-        <>
-          {/* Progress Overview */}
-          <Card>
-            <CardHeader>
-              <CardTitle>申请总览</CardTitle>
-              <CardDescription>共 {stats.total} 个申请</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
-                  className="bg-gradient-to-r from-green-400 via-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300 relative"
-                  style={{ width: `${stats.total > 0 ? (stats.submitted + stats.accepted) / stats.total * 100 : 0}%` }}
-                >
-                  <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-                </div>
+      {/* 快速统计 */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <BookOpen className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-sm text-gray-600">总申请</p>
               </div>
-              <div className="flex justify-between items-center mt-3">
-                <p className="text-sm font-medium text-gray-600">
-                  {stats.total > 0 ? Math.round((stats.submitted + stats.accepted) / stats.total * 100) : 0}% 完成
-                </p>
-                <div className="flex space-x-3 text-xs flex-wrap">
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-gray-300 rounded-full mr-1"></span>
-                    未开始: {applications.filter(app => app.status === 'NOT_STARTED').length}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-yellow-400 rounded-full mr-1"></span>
-                    进行中: {applications.filter(app => app.status === 'IN_PROGRESS').length}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
-                    已提交: {stats.submitted}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-1"></span>
-                    审核中: {applications.filter(app => app.status === 'UNDER_REVIEW').length}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
-                    已录取: {stats.accepted}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
-                    被拒绝: {applications.filter(app => app.decisionType === 'REJECTED').length}
-                  </span>
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-orange-400 rounded-full mr-1"></span>
-                    等待名单: {applications.filter(app => app.decisionType === 'WAITLISTED').length}
-                  </span>
-                </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.submitted}</p>
+                <p className="text-sm text-gray-600">已提交</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.accepted}</p>
+                <p className="text-sm text-gray-600">已录取</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="h-8 w-8 text-yellow-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.withFinancialPlan}</p>
+                <p className="text-sm text-gray-600">财务规划</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Applications List */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">申请列表</h2>
-            {applications.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <BookOpen className="h-12 w-12 text-gray-600 mb-4" />
-                  <p className="text-gray-600">还没有添加任何申请</p>
-                </CardContent>
-              </Card>
-            ) : (
-              applications.map((application) => (
-                <Card key={application.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">
-                          {application.university.name}
-                        </CardTitle>
-                        <CardDescription>
-                          #{application.university.usNewsRanking} · {application.university.country}
-                        </CardDescription>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(application.decisionType || application.status)}
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(application.status)}`}>
-                          {application.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">申请类型:</span>
-                        <span className="text-sm font-medium">
-                          {application.applicationType.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">截止日期:</span>
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-sm font-medium px-2 py-1 rounded ${getDeadlineColor(application.deadline).color}`}>
-                            {new Date(application.deadline).toLocaleDateString('zh-CN')}
-                          </span>
-                          <span className={`text-xs px-2 py-1 rounded ${getDeadlineColor(application.deadline).color}`}>
-                            {getDeadlineColor(application.deadline).text}
-                          </span>
+      <div className="space-y-6">
+        {applications.map((application) => (
+            <Card key={application.id} className="overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-xl text-gray-900">
+                      {application.university.name}
+                    </CardTitle>
+                    <CardDescription className="text-gray-600">
+                      {application.university.country} • {application.applicationType.replace('_', ' ')}
+                      {application.university.usNewsRanking && (
+                        <span className="ml-2">排名: #{application.university.usNewsRanking}</span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(application.status)}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(application.status)}`}>
+                      {application.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  {/* 申请基本信息 - 重新设计为更清晰的布局 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 左侧：基本信息 */}
+                    <div className="lg:col-span-2 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">截止日期</span>
+                            <div className="text-right">
+                              <div className={`text-sm font-semibold px-2 py-1 rounded-full ${getDeadlineColor(application.deadline).color}`}>
+                                {new Date(application.deadline).toLocaleDateString('zh-CN')}
+                              </div>
+                              <div className={`text-xs mt-1 px-2 py-1 rounded-full ${getDeadlineColor(application.deadline).color}`}>
+                                {getDeadlineColor(application.deadline).text}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <span className="text-sm text-gray-600">要求进度:</span>
-                        <div className="mt-2">
-                          <div className="flex space-x-2">
-                            {application.requirements.map((req) => (
-                              <span 
-                                key={req.id}
-                                className={`px-2 py-1 rounded text-xs ${
-                                  req.status === 'COMPLETED' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : req.status === 'IN_PROGRESS'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {req.requirementType.replace('_', ' ')}
-                              </span>
-                            ))}
+                        
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">申请类型</span>
+                            <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                              {application.applicationType.replace('_', ' ')}
+                            </span>
                           </div>
                         </div>
                       </div>
                       
-                      {/* Status Change History */}
-                      {application.statusLogs && application.statusLogs.length > 0 && (
-                        <div className="border-t pt-3">
-                          <span className="text-sm text-gray-600">状态变更历史:</span>
-                          <div className="mt-2 space-y-2">
-                            {application.statusLogs.slice(0, 3).map((log) => (
-                              <div key={log.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-gray-600">
-                                    {log.oldStatus.replace('_', ' ')} → {log.newStatus.replace('_', ' ')}
-                                  </span>
-                                  {log.reason && (
-                                    <span className="text-gray-500">({log.reason})</span>
-                                  )}
-                                </div>
-                                <div className="text-right text-gray-500">
-                                  <div>{log.changedByUser.name}</div>
-                                  <div className="text-xs">{new Date(log.createdAt).toLocaleDateString('zh-CN')}</div>
-                                </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">申请状态</span>
+                            <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusColor(application.status)}`}>
+                              {application.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">财务规划</span>
+                            {application.financialPlan ? (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-green-600 font-medium bg-green-50 px-2 py-1 rounded-full">已创建</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleCreateFinancialPlan(application.id)}
+                                  className="h-7 px-2 text-blue-600 border-blue-600 hover:bg-blue-50"
+                                >
+                                  <Edit className="h-3 w-3 mr-1" />
+                                  编辑
+                                </Button>
                               </div>
-                            ))}
-                            {application.statusLogs.length > 3 && (
-                              <div className="text-xs text-gray-500 text-center">
-                                还有 {application.statusLogs.length - 3} 条记录...
-                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCreateFinancialPlan(application.id)}
+                                className="h-7 px-2 text-blue-600 border-blue-600 hover:bg-blue-50"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                创建规划
+                              </Button>
                             )}
                           </div>
                         </div>
-                      )}
-
-                      {/* Notes Section */}
-                      <div className="border-t pt-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-gray-600">备注:</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditNotes(application)}
-                            className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
+                      </div>
+                    </div>
+                    
+                    {/* 右侧：备注 */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-gray-700">备注</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditNotes(application)}
+                          className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      {application.notes ? (
+                        <div className="text-sm text-gray-700 bg-white p-3 rounded border">
+                          {application.notes}
                         </div>
-                        {application.notes ? (
-                          <div className="text-sm text-gray-700 bg-blue-50 p-2 rounded">
-                            {application.notes}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-400 italic">
-                            暂无备注
-                          </div>
-                        )}
-                      </div>
+                      ) : (
+                        <div className="text-sm text-gray-400 italic bg-white p-3 rounded border">
+                          暂无备注
+                        </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Financial Planning View */}
-      {viewMode === 'financial' && (
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold">财务规划</h2>
-          
-          {currentFinancialPlan ? (
-            <>
-              {/* Total Cost Overview */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <DollarSign className="h-5 w-5 mr-2 text-green-600" />
-                    年度总费用概览
-                  </CardTitle>
-                  <CardDescription>预估每年的总教育成本</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-green-600 mb-2">
-                      ${calculateTotalCost(currentFinancialPlan).toLocaleString()}
-                    </div>
-                    <p className="text-gray-600">每年总费用</p>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Cost Breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Calculator className="h-5 w-5 mr-2 text-blue-600" />
-                      学费成本
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span>学费</span>
-                        <span className="font-semibold">${(currentFinancialPlan.tuition || 0).toLocaleString()}</span>
+                  
+                  {/* 状态变更历史 - 更清晰的表格样式 */}
+                  {application.statusLogs && application.statusLogs.length > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+                        <Clock className="h-4 w-4 mr-2 text-gray-600" />
+                        状态变更历史
+                      </h4>
+                      <div className="bg-white rounded-lg border overflow-hidden">
+                        <div className="grid grid-cols-5 gap-4 p-3 bg-gray-100 text-xs font-medium text-gray-700 border-b">
+                          <div>日期</div>
+                          <div>原状态</div>
+                          <div>新状态</div>
+                          <div>变更人</div>
+                          <div>原因</div>
+                        </div>
+                        {application.statusLogs.slice(0, 3).map((log) => (
+                          <div key={log.id} className="grid grid-cols-5 gap-4 p-3 text-xs text-gray-600 border-b last:border-b-0">
+                            <div>{new Date(log.createdAt).toLocaleDateString('zh-CN')}</div>
+                            <div className="text-gray-500">{log.oldStatus.replace('_', ' ')}</div>
+                            <div className="text-gray-500">→ {log.newStatus.replace('_', ' ')}</div>
+                            <div className="text-gray-500">{log.changedByUser.name}</div>
+                            <div className="text-gray-400">{log.reason || '-'}</div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex justify-between">
-                        <span>住宿餐饮</span>
-                        <span className="font-semibold">${(currentFinancialPlan.roomAndBoard || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>书籍用品</span>
-                        <span className="font-semibold">${(currentFinancialPlan.booksAndSupplies || 0).toLocaleString()}</span>
+                      {application.statusLogs.length > 3 && (
+                        <div className="text-xs text-blue-600 mt-2 text-center">
+                          还有 {application.statusLogs.length - 3} 条记录...
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* 申请要求状态 - 更直观的进度显示 */}
+                  {application.requirements && application.requirements.length > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+                        <CheckCircle className="h-4 w-4 mr-2 text-gray-600" />
+                        申请要求进度
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {application.requirements.map((req) => (
+                          <div key={req.id} className="bg-white p-3 rounded-lg border">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className={`w-3 h-3 rounded-full ${
+                                req.status === 'COMPLETED' ? 'bg-green-500' : 
+                                req.status === 'IN_PROGRESS' ? 'bg-yellow-500' : 'bg-gray-400'
+                              }`}></span>
+                              <span className="text-xs font-medium text-gray-700">{req.requirementType.replace('_', ' ')}</span>
+                            </div>
+                            <div className={`text-xs px-2 py-1 rounded-full text-center ${
+                              req.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
+                              req.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {req.status === 'COMPLETED' ? '已完成' : 
+                               req.status === 'IN_PROGRESS' ? '进行中' : '未开始'}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
-                      其他费用
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span>个人开支</span>
-                        <span className="font-semibold">${(currentFinancialPlan.personalExpenses || 0).toLocaleString()}</span>
+                  )}
+                  
+                  {/* 财务规划详情 - 更突出的费用展示 */}
+                  {application.financialPlan && (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
+                      <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                        <DollarSign className="h-5 w-5 mr-2 text-blue-600" />
+                        财务规划详情
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">学费</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.tuition || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">住宿餐饮</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.roomAndBoard || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">书籍用品</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.booksAndSupplies || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">个人开支</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.personalExpenses || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">交通费用</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.transportation || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <p className="text-xs text-gray-600 mb-1">其他费用</p>
+                          <p className="text-lg font-bold text-blue-900">${(application.financialPlan.otherFees || 0).toLocaleString()}</p>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>交通费用</span>
-                        <span className="font-semibold">${(currentFinancialPlan.transportation || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>其他费用</span>
-                        <span className="font-semibold">${(currentFinancialPlan.otherFees || 0).toLocaleString()}</span>
+                      
+                      <div className="bg-white p-4 rounded-lg border border-blue-200">
+                        <div className="flex justify-between items-center">
+                          <span className="text-lg font-semibold text-blue-900">总费用预估</span>
+                          <span className="text-2xl font-bold text-blue-900">
+                            ${((application.financialPlan.tuition || 0) +
+                               (application.financialPlan.roomAndBoard || 0) +
+                               (application.financialPlan.booksAndSupplies || 0) +
+                               (application.financialPlan.personalExpenses || 0) +
+                               (application.financialPlan.transportation || 0) +
+                               (application.financialPlan.otherFees || 0)).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Financial Planning Tools */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>财务规划工具</CardTitle>
-                  <CardDescription>帮助您更好地规划教育投资</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Button variant="outline" className="h-20 flex-col">
-                      <Calculator className="h-6 w-6 mb-2" />
-                      费用计算器
-                    </Button>
-                    <Button variant="outline" className="h-20 flex-col">
-                      <TrendingUp className="h-6 w-6 mb-2" />
-                      投资回报分析
-                    </Button>
-                    <Button variant="outline" className="h-20 flex-col">
-                      <DollarSign className="h-6 w-6 mb-2" />
-                      奖学金搜索
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <DollarSign className="h-12 w-12 text-gray-600 mb-4" />
-                <p className="text-gray-600">暂无财务规划数据</p>
-                <Button 
-                  className="mt-4" 
-                  variant="outline"
-                  onClick={() => handleCreateFinancialPlan()}
-                >
-                  创建财务规划
-                </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
-          )}
+          ))}
         </div>
-      )}
 
       {/* 编辑备注模态框 */}
       {showEditModal && editingApplication && (
@@ -653,8 +645,10 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
       {showFinancialPlanModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
-            <h3 className="text-lg font-semibold mb-4">创建财务规划</h3>
-            <p className="text-sm text-gray-600 mb-4">为孩子的大学教育制定详细的财务预算</p>
+            <h3 className="text-lg font-semibold mb-4">
+              创建财务规划 - {applications.find(app => app.id === selectedApplicationId)?.university.name}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">为此申请制定详细的财务预算</p>
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -730,7 +724,10 @@ export function ParentDashboard({ studentId }: ParentDashboardProps) {
             <div className="flex space-x-3 mt-6">
               <Button
                 variant="outline"
-                onClick={() => setShowFinancialPlanModal(false)}
+                onClick={() => {
+                  setShowFinancialPlanModal(false)
+                  setSelectedApplicationId('')
+                }}
                 className="flex-1"
               >
                 取消

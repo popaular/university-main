@@ -289,22 +289,6 @@ export function StudentDashboard({ studentId }: StudentDashboardProps) {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">我的申请</h1>
         <div className="flex space-x-2">
-          <Button
-            variant={viewMode === 'cards' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('cards')}
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            卡片视图
-          </Button>
-          <Button
-            variant={viewMode === 'timeline' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('timeline')}
-          >
-            <List className="h-4 w-4 mr-2" />
-            时间线视图
-          </Button>
         </div>
       </div>
 
