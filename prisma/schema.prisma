@@ -11,84 +11,101 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      UserRole @default(STUDENT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id              String                 @id @default(cuid())
+  email           String                 @unique
+  password        String
+  name            String
+  role            UserRole               @default(STUDENT)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  
   // Student profile
-  graduationYear Int?
-  gpa           Float?
-  satScore      Int?
-  actScore      Int?
-  targetCountries Json? // JSON array
-  intendedMajors  Json? // JSON array
-
+  graduationYear  Int?
+  gpa             Float?
+  satScore        Int?
+  actScore        Int?
+  targetCountries Json?  // 支持数组格式
+  intendedMajors  Json?  // 支持数组格式
+  
   // Relations
-  applications Application[]
-  parentChildren ParentStudent[] @relation("ParentRelation")
-  studentChildren ParentStudent[] @relation("StudentRelation")
-  notes        Note[]
+  applications    Application[]
+  statusLogs      ApplicationStatusLog[] @relation("StatusLogUser")
+  notes           Note[]
+  parentChildren  ParentStudent[]        @relation("ParentRelation")
+  studentChildren ParentStudent[]        @relation("StudentRelation")
 
   @@map("users")
 }
 
 model University {
-  id               String   @id @default(cuid())
-  name             String
-  country          String
-  state            String?
-  city             String?
-  usNewsRanking    Int?
-  acceptanceRate   Float?
+  id                String        @id @default(cuid())
+  name              String
+  country           String
+  state             String?
+  city              String?
+  usNewsRanking     Int?
+  acceptanceRate    Float?
   applicationSystem String // 'Common App', 'Coalition', 'Direct'
-  tuitionInState   Float?
-  tuitionOutState  Float?
-  applicationFee   Float?
-  deadlines        Json     // {early_decision: 'date', early_action: 'date', regular: 'date'}
-  requirements     Json?    // {gpa: 4.0, sat: {min: 1500, max: 1600}, essays: [...]}
+  tuitionInState    Float?
+  tuitionOutState   Float?
+  applicationFee    Float?
+  deadlines         Json     // {early_decision: 'date', early_action: 'date', regular: 'date'}
+  requirements      Json?    // {gpa: 4.0, sat: {min: 1500, max: 1600}, essays: [...]}
   
   // Relations
-  applications Application[]
+  applications      Application[]
 
   @@map("universities")
 }
 
 model Application {
-  id              String           @id @default(cuid())
+  id              String                   @id @default(cuid())
   studentId       String
   universityId    String
-  applicationType ApplicationType  // 'EARLY_DECISION', 'EARLY_ACTION', 'REGULAR_DECISION', 'ROLLING_ADMISSION'
+  applicationType ApplicationType          // 'EARLY_DECISION', 'EARLY_ACTION', 'REGULAR_DECISION', 'ROLLING_ADMISSION'
   deadline        DateTime
-  status          ApplicationStatus @default(NOT_STARTED)
+  status          ApplicationStatus        @default(NOT_STARTED)
   submittedDate   DateTime?
   decisionDate    DateTime?
   decisionType    DecisionType?
   notes           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
   // Relations
-  student    User       @relation(fields: [studentId], references: [id])
-  university University @relation(fields: [universityId], references: [id])
-  requirements ApplicationRequirement[]
+  student         User                     @relation(fields: [studentId], references: [id])
+  university      University               @relation(fields: [universityId], references: [id])
+  requirements    ApplicationRequirement[]
+  statusLogs      ApplicationStatusLog[]
 
   @@map("applications")
 }
 
-model ApplicationRequirement {
-  id             String           @id @default(cuid())
-  applicationId  String
-  requirementType RequirementType  // 'ESSAY', 'TRANSCRIPT', 'RECOMMENDATION', 'TEST_SCORES', 'PORTFOLIO'
-  status         RequirementStatus @default(NOT_STARTED)
-  deadline       DateTime?
-  notes          String?
+model ApplicationStatusLog {
+  id            String            @id @default(cuid())
+  applicationId String
+  oldStatus     ApplicationStatus
+  newStatus     ApplicationStatus
+  changedBy     String
+  changedByRole UserRole
+  reason        String?
+  createdAt     DateTime          @default(now())
   
   // Relations
-  application Application @relation(fields: [applicationId], references: [id])
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  changedByUser User              @relation("StatusLogUser", fields: [changedBy], references: [id])
+
+  @@map("application_status_logs")
+}
+
+model ApplicationRequirement {
+  id              String            @id @default(cuid())
+  applicationId   String
+  requirementType RequirementType   // 'ESSAY', 'TRANSCRIPT', 'RECOMMENDATION', 'TEST_SCORES', 'PORTFOLIO'
+  status          RequirementStatus @default(NOT_STARTED)
+  deadline        DateTime?
+  notes           String?
+  application     Application       @relation(fields: [applicationId], references: [id])
 
   @@map("application_requirements")
 }
@@ -138,6 +155,11 @@ enum ApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
   DECISION_RECEIVED
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+  DEFERRED
 }
 
 enum DecisionType {

@@ -17,8 +17,8 @@ async function main() {
       gpa: 3.8,
       satScore: 1450,
       actScore: 32,
-      targetCountries: JSON.stringify(['美国', '加拿大']),
-      intendedMajors: JSON.stringify(['计算机科学', '数据科学']),
+      targetCountries: ['美国', '加拿大'],
+      intendedMajors: ['计算机科学', '数据科学'],
     },
   })
 
